@@ -105,6 +105,7 @@ int signed2BytesInt(int highByte, int lowByte)
 
 void wakeUp() 
 {
+  debugV("Waking up...");
   pinMode(ROOMBA_WAKEUP, OUTPUT);
   delay(100);
   digitalWrite(ROOMBA_WAKEUP, HIGH);
@@ -112,45 +113,53 @@ void wakeUp()
   digitalWrite(ROOMBA_WAKEUP, LOW);
   delay(500);
   digitalWrite(ROOMBA_WAKEUP, HIGH);
+  debugV("Wakeup complete!");
 }
 
 void clean() {
+  debugV("Sending 'clean' command");
   Serial.write(128);
   delay(50);
   Serial.write(135);
 }
 
 void cleanMax() {
+  debugV("Sending 'cleanMax' command");
   Serial.write(128);
   delay(50);
   Serial.write(136);
 }
 
 void cleanSpot() {
+  debugV("Sending 'cleanSpot' command");
   Serial.write(128);
   delay(50);
   Serial.write(134);
 }
 
 void seekDock() {
+  debugV("Sending 'seekDock' command");
   Serial.write(128);
   delay(50);
   Serial.write(143);
 }
 
 void stop() {
+  debugV("Sending 'stop' command");
   Serial.write(128);
   delay(50);
   Serial.write(173);
 }
 
 void powerOff() {
+  debugV("Sending 'powerOff' command");
   Serial.write(128);
   delay(50);
   Serial.write(133);
 }
 
 void flush() {
+  debugV("Flushing serial buffer");
   int bytes = Serial.available();
   char buf[bytes];
   if(bytes > 0) {
@@ -161,6 +170,7 @@ void flush() {
 
 bool updateTime() 
 {
+  debugV("Updating time with NTP");
   timeClient.begin();
   timeClient.setTimeOffset(NTP_TIME_OFFSET);
   bool result = timeClient.forceUpdate();
@@ -176,6 +186,7 @@ bool updateTime()
     Serial.write(day);
     Serial.write(hour);
     Serial.write(minutes);
+     debugV("Updating time success (%d:%d:%d)", day, hour, minutes);
   }
 
   return result;
@@ -196,6 +207,7 @@ Sensors updateSensors() {
   
   flush();
 
+  debugV("Updating sensors start...");
   Serial.write(128);
   Serial.write(142);
   Serial.write(6);
@@ -228,8 +240,10 @@ Sensors updateSensors() {
     sensors.batteryCharge = unsigned2BytesInt(sensorbytes[22],sensorbytes[23]);
     sensors.batteryCapacity = unsigned2BytesInt(sensorbytes[24], sensorbytes[25]);
     sensors.batteryPercent = 100 * sensors.batteryCharge / sensors.batteryCapacity;
+    debugV("Updating sensors success!");
   } else {
     sensors.hasData = false;
+    debugV("Updating sensors failed");
   }
 
   return sensors;
@@ -292,6 +306,7 @@ void publishSensorsInformation() {
     String str;
     serializeJson(doc, str);
     mqttClient.publish(MQTT_STATE_TOPIC, str.c_str());
+    debugV("Sensors info published to MQTT");
   }
 }
 
@@ -300,13 +315,13 @@ void publishHomeAssistantAutoDiscovery(String uniqueId, String name, String valu
   DynamicJsonDocument doc(500);
   String fullName;
   String fullId;
-  if(!name) {
+  if(name == "") {
     fullName =  String(MQTT_CLIENT_NAME);
   } else {
     fullName = String(MQTT_CLIENT_NAME) + " " + name;
   }
 
-  if(!uniqueId) {
+  if(uniqueId == "") {
     fullId =  String(HASS_UNIQUE_ID);
   } else {
     fullId = String(HASS_UNIQUE_ID) + "_" + uniqueId;
@@ -353,6 +368,7 @@ void publishHomeAssistantAutoDiscovery(String uniqueId, String name, String valu
   serializeJson(doc, str);
   String topic = "homeassistant/" + topicType + "/" + fullId + "/config";
   mqttClient.publish(topic.c_str(), str.c_str(), true);
+  debugV("Auto discovery info published to MQTT!");
 }
 
 void onMQTTMessage(char* topic, byte* payload, unsigned int length) 
@@ -388,6 +404,7 @@ void connectMQTT()
      // Attempt to connect
       if (mqttClient.connect(MQTT_CLIENT_NAME, MQTT_USER, MQTT_PASSWORD, MQTT_AVAILABILITY_TOPIC, 0, true, "offline")) 
       {
+        debugV("MQTT connection sucessful, subscribing to command topic: %s", MQTT_COMMAND_TOPIC);
         mqttClient.subscribe(MQTT_COMMAND_TOPIC);
         mqttClient.publish(MQTT_AVAILABILITY_TOPIC, "online", true);
         publishHomeAssistantAutoDiscovery("", "", "", "", "", "vacuum", true);
